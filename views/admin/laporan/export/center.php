@@ -6,6 +6,7 @@
 
 require_once '../../../../includes/auth.php';
 require_once '../../../../includes/laporan_controller.php';
+require_once '../../../../includes/encryption.php';
 
 // 2. Cek Login & Role
 $user = checkLogin('../../../auth/login.php'); 
@@ -152,7 +153,7 @@ $queryString = http_build_query([
                             <tr class="hover:bg-slate-50/50 transition-all">
                                 <td class="p-4 text-xs text-slate-500"><?= date('d/m/y', strtotime($row['tgl_laporan'])) ?></td>
                                 <td class="p-4 font-bold text-slate-700 text-sm"><?= htmlspecialchars($row['nama_siswa']) ?></td>
-                                <td class="p-4 text-xs text-slate-600 italic">"<?= htmlspecialchars($row['judul_laporan']) ?>"</td>
+                                <td class="p-4 text-xs text-slate-600 italic">"<?= htmlspecialchars(decryptData($row['judul_laporan'])) ?>"</td>
                                 <td class="p-4 text-center">
                                     <span class="px-2 py-1 rounded-md text-[9px] font-bold uppercase bg-slate-100 text-slate-600"><?= $row['status'] ?></span>
                                 </td>

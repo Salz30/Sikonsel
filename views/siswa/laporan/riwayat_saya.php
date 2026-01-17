@@ -4,6 +4,7 @@
 // 1. Mundur 3 langkah untuk mencari folder includes
 require_once '../../../includes/auth.php';
 require_once '../../../includes/laporan_controller.php';
+require_once '../../../includes/encryption.php';
 
 // 2. Cek Login (Jika belum login, lempar ke ../../auth/login.php)
 $user = checkLogin('../../auth/login.php');

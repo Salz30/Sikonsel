@@ -2,7 +2,8 @@
 // MUNDUR 3 LANGKAH: laporan -> admin -> views -> root
 require_once '../../../includes/auth.php';
 require_once '../../../includes/laporan_controller.php';
-require_once '../../../includes/siswa_controller.php'; 
+require_once '../../../includes/siswa_controller.php';
+require_once '../../../includes/encryption.php';
 
 // Cek Login
 $user = checkLogin('../../auth/login.php');
@@ -15,7 +16,9 @@ $laporanList = getAllLaporan($conn);
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['quick_id']) && isset($_POST['quick_status'])) {
     $id = $_POST['quick_id'];
     $status = $_POST['quick_status'];
-    $id_guru = $user['user_id'];
+    
+    // PERBAIKAN 1: Mengambil ID User dengan key yang benar ('id_user' atau 'id')
+    $id_guru = $user['id_user'] ?? $user['id'];
 
     if (updateStatusLaporan($conn, $id, $status, $id_guru)) {
         header("Location: masuk_laporan.php?msg=updated");
@@ -99,12 +102,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['quick_id']) && isset($
                                     <div class="font-bold text-slate-700"><?php echo htmlspecialchars($row['nama_siswa'] ?? 'Tanpa Nama'); ?></div>
                                     <div class="text-xs text-slate-400"><?php echo htmlspecialchars($row['nisn'] ?? '-'); ?></div>
                                 </td>
-                                <td class="p-4 text-slate-800 font-medium"><?php echo htmlspecialchars($row['judul_laporan']); ?></td>
+                                <td class="p-4 text-slate-800 font-medium"><?php echo htmlspecialchars(decryptData($row['judul_laporan'])); ?></td>
+                                
                                 <td class="p-4">
-                                    <span class="px-2 py-1 rounded text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200"><?php echo htmlspecialchars($row['kategori']); ?></span>
+                                    <?php if (!empty($row['kategori'])): ?>
+                                        <span class="px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200">
+                                            <?php echo htmlspecialchars($row['kategori']); ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="text-slate-300 text-xs italic">-</span>
+                                    <?php endif; ?>
                                 </td>
+
                                 <td class="p-4">
-                                    <div onclick="event.stopPropagation()"> <form method="POST" action="" id="statusForm<?= $row['id_laporan'] ?>">
+                                    <div onclick="event.stopPropagation()"> 
+                                        <form method="POST" action="masuk_laporan.php" id="statusForm<?= $row['id_laporan'] ?>">
                                             <input type="hidden" name="quick_id" value="<?php echo $row['id_laporan']; ?>">
                                             <?php 
                                                 $borderColor = match($row['status']) {

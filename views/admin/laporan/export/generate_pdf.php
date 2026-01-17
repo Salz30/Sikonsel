@@ -1,243 +1,282 @@
 <?php
-/**
- * Generate PDF (Print View) Laporan BK
- * Mendukung: Cetak Individu, Cetak Bulanan, dan Filter Status/Nama.
- */
-require_once '../../../../includes/auth.php';
-require_once '../../../../includes/laporan_controller.php';
+// File: views/admin/laporan/export/generate_pdf.php
 
-$user = checkLogin();
-if ($user['role'] !== 'guru_bk') {
-    header("Location: ../../../../index.php");
-    exit;
+// 1. SETUP PATH YANG BENAR (MENGGUNAKAN ABSOLUTE PATH)
+// __DIR__ adalah folder 'export'. 
+// Mundur 4 kali: export -> laporan -> admin -> views -> public_html (Root)
+$root = realpath(__DIR__ . '/../../../../'); 
+
+if (!$root) {
+    die("Error: Gagal mendeteksi root folder. Cek struktur direktori.");
 }
 
-// Ambil Parameter Filter dari URL (GET)
-$id_single = $_GET['id'] ?? null;
-$filter_status = $_GET['status'] ?? null;
-$filter_search = $_GET['search'] ?? null;
-$filter_month  = $_GET['month'] ?? null; // format: 01-12
-$filter_year   = $_GET['year'] ?? date('Y');
+// 2. INCLUDE FILE PENTING
+require_once $root . '/config/database.php';
+require_once $root . '/includes/auth.php';
+require_once $root . '/includes/encryption.php';
 
+// Cek Login Admin/Guru BK
+$user = checkLogin(); 
+
+// 3. LOGIKA PENGAMBILAN DATA (DATABASE)
 $laporanList = [];
-$is_single = false;
+$isSingle = false;
 
-// LOGIKA PENGAMBILAN DATA
-if ($id_single) {
-    // Kasus 1: Cetak Satu Laporan Spesifik (Individu)
-    $report = getLaporanById($conn, $id_single);
-    if ($report) {
-        $laporanList[] = $report;
-        $is_single = true;
+// Jika ada parameter 'id' di URL, berarti CETAK SATUAN
+if (isset($_GET['id']) && !empty($_GET['id'])) {
+    $isSingle = true;
+    $id = $_GET['id'];
+    
+    // Query Detail (Join dengan Siswa & User)
+    $sql = "SELECT l.*, s.nisn, s.kelas, u.nama_lengkap 
+            FROM laporan_bk l
+            LEFT JOIN siswa s ON l.id_siswa = s.id_siswa
+            LEFT JOIN users u ON s.user_id = u.id_user
+            WHERE l.id_laporan = ?";
+            
+    $stmt = $conn->prepare($sql);
+    $stmt->execute([$id]);
+    $data = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($data) {
+        $data['judul_laporan'] = decryptData($data['judul_laporan']);
+        $data['isi_laporan'] = decryptData($data['isi_laporan']);
+        $laporanList[] = $data;
     }
-} else {
-    // Kasus 2: Cetak Daftar dengan Filter (Bulanan/Status/Nama)
-    $query = "SELECT laporan_bk.*, siswa.nisn, users.nama_lengkap as nama_siswa 
-              FROM laporan_bk 
-              JOIN siswa ON laporan_bk.id_siswa = siswa.id_siswa
-              JOIN users ON siswa.user_id = users.id_user
-              WHERE 1=1";
+} 
+// Jika TIDAK ada 'id', berarti CETAK REKAPAN
+else {
+    $year = $_GET['year'] ?? date('Y');
+    $month = $_GET['month'] ?? '';
+    $status = $_GET['status'] ?? '';
+    $search = $_GET['search'] ?? '';
+    
+    $sql = "SELECT l.*, s.nisn, s.kelas, u.nama_lengkap 
+            FROM laporan_bk l
+            LEFT JOIN siswa s ON l.id_siswa = s.id_siswa
+            LEFT JOIN users u ON s.user_id = u.id_user
+            WHERE 1=1";
+            
     $params = [];
-
-    if ($filter_status) {
-        $query .= " AND laporan_bk.status = ?";
-        $params[] = $filter_status;
+    
+    if ($year) {
+        $sql .= " AND YEAR(l.tgl_laporan) = ?";
+        $params[] = $year;
     }
-    if ($filter_search) {
-        $query .= " AND users.nama_lengkap LIKE ?";
-        $params[] = "%$filter_search%";
+    if ($month) {
+        $sql .= " AND MONTH(l.tgl_laporan) = ?";
+        $params[] = $month;
     }
-    if ($filter_month) {
-        $query .= " AND MONTH(laporan_bk.tgl_laporan) = ? AND YEAR(laporan_bk.tgl_laporan) = ?";
-        $params[] = $filter_month;
-        $params[] = $filter_year;
+    if ($status) {
+        $sql .= " AND l.status = ?";
+        $params[] = $status;
     }
-
-    $query .= " ORDER BY laporan_bk.tgl_laporan DESC";
-    $stmt = $conn->prepare($query);
+    if ($search) {
+        $sql .= " AND (u.nama_lengkap LIKE ? OR s.nisn LIKE ?)";
+        $term = "%$search%";
+        $params[] = $term;
+        $params[] = $term;
+    }
+    
+    $sql .= " ORDER BY l.tgl_laporan DESC";
+    
+    $stmt = $conn->prepare($sql);
     $stmt->execute($params);
-    $laporanList = $stmt->fetchAll();
+    $rawList = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach($rawList as $row) {
+        $row['judul_laporan'] = decryptData($row['judul_laporan']);
+        $laporanList[] = $row;
+    }
 }
 
-// Helper Nama Bulan
-$nama_bulan = [
-    '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April', '05' => 'Mei', '06' => 'Juni',
-    '07' => 'Juli', '08' => 'Agustus', '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
-];
+$orientation = $isSingle ? 'portrait' : 'landscape';
 ?>
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title><?php echo $is_single ? 'Laporan_Individu_Sikonsel' : 'Rekapitulasi_BK_Sikonsel'; ?></title>
+    <title>Cetak Laporan - SIKONSEL</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Poppins', sans-serif; }
+        /* --- CSS MAGIC UNTUK MENGHILANGKAN HEADER/FOOTER BROWSER --- */
         @media print {
-            /* Sembunyikan Header dan Footer default browser (URL, Tanggal, Folder) */
-            @page { 
-                margin: 0; 
+            @page {
+                size: <?php echo $orientation; ?>; 
+                margin: 0; /* PENTING: Margin 0 menghilangkan Header/Footer bawaan browser */
             }
-            .no-print { 
-                display: none !important; 
+            body {
+                padding: 20mm; /* Kita pakai padding body sebagai pengganti margin */
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
-            body { 
-                background-color: white !important; 
-                margin: 0 !important; 
-                padding: 0 !important; 
-            }
-            .print-container { 
-                box-shadow: none !important; 
-                border: none !important; 
-                width: 100% !important; 
-                max-width: 100% !important; 
-                margin: 0 !important; 
-                padding: 2cm !important; 
-                min-height: 100vh;
-            }
+            .no-print { display: none !important; }
+            
+            /* Agar tabel rekap tidak terpotong jelek */
             tr { page-break-inside: avoid; }
         }
+        
+        body { font-family: 'Times New Roman', serif; }
+        .font-sans { font-family: Arial, sans-serif; }
     </style>
 </head>
-<body class="bg-slate-100 p-6 md:p-10">
+<body class="bg-white text-black" onload="window.print()">
 
-    <!-- Header Navigasi (Hanya muncul di Layar) -->
-    <div class="no-print max-w-5xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-center bg-blue-600 text-white p-5 rounded-2xl shadow-xl">
-        <div class="mb-4 md:mb-0">
-            <h1 class="font-bold text-lg">Pratinjau Cetak Laporan</h1>
-            <p class="text-xs opacity-90">Lokasi file dan header browser telah disembunyikan secara otomatis.</p>
+    <div class="no-print fixed top-4 right-4 flex gap-2 z-50">
+        <button onclick="window.print()" class="bg-blue-600 text-white px-4 py-2 rounded shadow font-sans text-sm font-bold hover:bg-blue-700">🖨️ Cetak PDF</button>
+        <button onclick="window.close()" class="bg-gray-500 text-white px-4 py-2 rounded shadow font-sans text-sm font-bold hover:bg-gray-600">Tutup</button>
+    </div>
+
+    <header class="text-center mb-8 border-b-4 border-double border-black pb-4">
+        <h2 class="text-2xl font-bold uppercase">SMP NEGERI 4 RANCAEKEK</h2>
+        <p class="text-sm">Jl. Rancakendal Dua, Linggar, Kec. Rancaekek, Kabupaten Bandung, Jawa Barat 40394</p>
+        <p class="text-sm italic">Laporan Bimbingan & Konseling Siswa</p>
+    </header>
+
+    <?php if ($isSingle && !empty($laporanList)): $row = $laporanList[0]; ?>
+    
+    <div class="max-w-3xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-xl font-bold underline uppercase">LEMBAR PERMASALAHAN SISWA</h1>
+            <p class="text-sm">Nomor: BK/<?php echo date('Y', strtotime($row['tgl_laporan'])); ?>/<?php echo $row['id_laporan']; ?></p>
         </div>
-        <div class="flex gap-3">
-            <button onclick="window.print()" class="bg-white text-blue-600 px-5 py-2.5 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all hover:bg-blue-50">
-                Cetak / Simpan PDF
-            </button>
-            <a href="center.php" class="bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-400 border border-blue-400 transition-all">
-                Kembali
-            </a>
+
+        <table class="w-full text-base mb-6">
+            <tr>
+                <td class="w-40 py-1 font-bold">Nama Siswa</td>
+                <td class="w-4">:</td>
+                <td><?php echo htmlspecialchars($row['nama_lengkap'] ?? 'Orang Tua/Wali'); ?></td>
+            </tr>
+            <tr>
+                <td class="py-1 font-bold">Kelas / NISN</td>
+                <td>:</td>
+                <td><?php echo htmlspecialchars($row['kelas'] ?? '-'); ?> / <?php echo htmlspecialchars($row['nisn'] ?? '-'); ?></td>
+            </tr>
+            <tr>
+                <td class="py-1 font-bold">Hari, Tanggal</td>
+                <td>:</td>
+                <td><?php echo date('l, d F Y', strtotime($row['tgl_laporan'])); ?></td>
+            </tr>
+            <tr>
+                <td class="py-1 font-bold">Kategori</td>
+                <td>:</td>
+                <td><?php echo htmlspecialchars($row['kategori']); ?></td>
+            </tr>
+            <tr>
+                <td class="py-1 font-bold">Status</td>
+                <td>:</td>
+                <td>
+                    <span class="border border-black px-2 py-0.5 text-sm font-bold">
+                        <?php echo strtoupper($row['status']); ?>
+                    </span>
+                </td>
+            </tr>
+        </table>
+
+        <div class="mb-6">
+            <h3 class="font-bold border-b border-black inline-block mb-2">Pokok Permasalahan:</h3>
+            <div class="border border-gray-500 p-4 bg-gray-50 min-h-[60px]">
+                <?php echo htmlspecialchars($row['judul_laporan']); ?>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <h3 class="font-bold border-b border-black inline-block mb-2">Uraian / Detail Laporan:</h3>
+            <div class="text-justify leading-relaxed whitespace-pre-wrap">
+                <?php echo htmlspecialchars($row['isi_laporan']); ?>
+            </div>
+        </div>
+
+        <?php if (!empty($row['tanggapan_guru'])): ?>
+        <div class="mb-6">
+            <h3 class="font-bold border-b border-black inline-block mb-2">Tindak Lanjut / Tanggapan Guru BK:</h3>
+            <div class="border border-gray-500 p-4 bg-gray-50 min-h-[60px] whitespace-pre-wrap">
+                <?php echo htmlspecialchars($row['tanggapan_guru']); ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <div class="flex justify-end mt-16">
+            <div class="text-center w-64">
+                <p>Rancaekek, <?php echo date('d F Y'); ?></p>
+                <p class="mb-20">Guru Bimbingan Konseling,</p>
+                <p class="font-bold underline border-b border-black inline-block min-w-[150px]"></p>
+                <p class="text-sm mt-1">NIP. ...........................</p>
+            </div>
         </div>
     </div>
 
-    <!-- Kontainer Dokumen (Bagian yang akan dicetak) -->
-    <div class="print-container max-w-5xl mx-auto bg-white p-12 md:p-16 shadow-2xl rounded-sm border border-slate-200">
-        
-        <!-- Kop Surat -->
-        <div class="text-center border-b-4 border-double border-slate-800 pb-6 mb-10 flex items-center justify-center gap-8">
-            <div class="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-4xl font-bold">S</div>
-            <div class="text-left">
-                <h2 class="text-2xl font-bold uppercase tracking-tighter">SMP NEGERI 4 RANCAEKEK</h2>
-                <p class="text-sm font-semibold italic text-slate-600">Layanan Bimbingan dan Konseling (BK) Digital</p>
-                <p class="text-xs text-slate-400 mt-1">Jl. Rancaekek Kencana No.4, Kabupaten Bandung, Jawa Barat.</p>
-            </div>
+    <?php else: ?>
+
+    <div class="w-full">
+        <div class="text-center mb-6">
+            <h2 class="text-xl font-bold uppercase">REKAPITULASI LAPORAN KONSELING</h2>
+            <p class="text-sm">Periode Cetak: <?php echo date('d F Y'); ?></p>
         </div>
 
-        <?php if ($is_single): $report = $laporanList[0]; ?>
-            <!-- TAMPILAN CETAK INDIVIDU -->
-            <h3 class="text-center text-xl font-bold uppercase mb-10 underline decoration-2 underline-offset-8">LAPORAN HASIL KONSELING INDIVIDU</h3>
-            
-            <div class="grid grid-cols-4 gap-y-4 text-sm mb-10">
-                <div class="font-bold">Nama Siswa</div><div class="col-span-3">: <?php echo htmlspecialchars($report['nama_siswa']); ?></div>
-                <div class="font-bold">NISN</div><div class="col-span-3">: <?php echo htmlspecialchars($report['nisn']); ?></div>
-                <div class="font-bold">Kategori</div><div class="col-span-3">: <?php echo htmlspecialchars($report['kategori']); ?></div>
-                <div class="font-bold">Tanggal</div><div class="col-span-3">: <?php echo date('d F Y', strtotime($report['tgl_laporan'])); ?></div>
-                <div class="font-bold">Status Laporan</div><div class="col-span-3">: <?php echo htmlspecialchars($report['status']); ?></div>
+        <?php if (empty($laporanList)): ?>
+            <div class="p-8 text-center border border-gray-300 bg-gray-50 text-gray-500 italic">
+                Tidak ada data laporan yang ditemukan untuk periode ini.
             </div>
-
-            <div class="mb-10">
-                <p class="font-bold text-sm mb-2">Pokok Permasalahan:</p>
-                <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg italic text-sm">
-                    "<?php echo htmlspecialchars($report['judul_laporan']); ?>"
-                </div>
-            </div>
-
-            <div class="mb-10">
-                <p class="font-bold text-sm mb-2">Uraian / Detail Laporan (Terdekripsi):</p>
-                <div class="text-sm leading-relaxed text-justify whitespace-pre-wrap min-h-[200px] p-6 border border-slate-100 rounded-xl bg-white shadow-inner">
-                    <?php echo nl2br(htmlspecialchars($report['isi_laporan_dekripsi'])); ?>
-                </div>
-            </div>
-
         <?php else: ?>
-            <!-- TAMPILAN CETAK DAFTAR / BULANAN -->
-            <h3 class="text-center text-xl font-bold uppercase mb-4 underline decoration-2 underline-offset-8">REKAPITULASI LAPORAN BK</h3>
-            <p class="text-center text-sm font-bold text-slate-600 mb-8">
-                <?php 
-                    if ($filter_month) echo "Periode: " . $nama_bulan[$filter_month] . " " . $filter_year;
-                    elseif ($filter_status) echo "Status Penanganan: " . $filter_status;
-                    elseif ($filter_search) echo "Pencarian Nama: " . htmlspecialchars($filter_search);
-                    else echo "Seluruh Data Laporan";
-                ?>
-            </p>
-
-            <table class="w-full text-[10px] border-collapse border border-slate-400">
+            <table class="w-full border-collapse border border-black text-sm">
                 <thead>
-                    <tr class="bg-slate-100">
-                        <th class="border border-slate-400 p-2 w-8 text-center">No</th>
-                        <th class="border border-slate-400 p-2 w-24 text-center">Tanggal</th>
-                        <th class="border border-slate-400 p-2 w-32">Identitas Siswa</th>
-                        <th class="border border-slate-400 p-2">Masalah & Cuplikan Laporan</th>
-                        <th class="border border-slate-400 p-2 w-20 text-center">Status</th>
+                    <tr class="bg-gray-200">
+                        <th class="border border-black px-2 py-2 w-10">No</th>
+                        <th class="border border-black px-2 py-2 w-24">Tanggal</th>
+                        <th class="border border-black px-2 py-2 w-48">Nama Siswa / Kelas</th>
+                        <th class="border border-black px-2 py-2 w-24">Kategori</th>
+                        <th class="border border-black px-2 py-2">Pokok Permasalahan</th>
+                        <th class="border border-black px-2 py-2 w-24">Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($laporanList)): ?>
-                        <tr><td colspan="5" class="p-4 text-center">Data tidak ditemukan sesuai filter.</td></tr>
-                    <?php else: $no = 1; foreach ($laporanList as $row): $isi = decryptData($row['isi_laporan']); ?>
-                        <tr>
-                            <td class="border border-slate-400 p-2 text-center"><?php echo $no++; ?></td>
-                            <td class="border border-slate-400 p-2 text-center"><?php echo date('d/m/Y', strtotime($row['tgl_laporan'])); ?></td>
-                            <td class="border border-slate-400 p-2">
-                                <span class="font-bold"><?php echo htmlspecialchars($row['nama_siswa']); ?></span><br>
-                                <span class="text-[8px] text-slate-500">NISN: <?php echo htmlspecialchars($row['nisn']); ?></span>
-                            </td>
-                            <td class="border border-slate-400 p-2 text-justify">
-                                <span class="font-bold"><?php echo htmlspecialchars($row['judul_laporan']); ?></span>
-                                <span class="text-[8px] italic">(<?php echo htmlspecialchars($row['kategori']); ?>)</span><br>
-                                <p class="mt-1 opacity-80"><?php echo nl2br(htmlspecialchars(substr($isi, 0, 150))); ?>...</p>
-                            </td>
-                            <td class="border border-slate-400 p-2 text-center font-bold text-[9px]"><?php echo strtoupper($row['status']); ?></td>
-                        </tr>
-                    <?php endforeach; endif; ?>
+                    <?php $no=1; foreach($laporanList as $row): ?>
+                    <tr>
+                        <td class="border border-black px-2 py-2 text-center"><?php echo $no++; ?></td>
+                        <td class="border border-black px-2 py-2 text-center">
+                            <?php echo date('d/m/Y', strtotime($row['tgl_laporan'])); ?>
+                        </td>
+                        <td class="border border-black px-2 py-2">
+                            <div class="font-bold"><?php echo htmlspecialchars($row['nama_lengkap'] ?? 'Orang Tua'); ?></div>
+                            <div class="text-xs text-gray-600"><?php echo htmlspecialchars($row['kelas'] ?? '-'); ?></div>
+                        </td>
+                        <td class="border border-black px-2 py-2 text-center">
+                            <?php echo htmlspecialchars($row['kategori']); ?>
+                        </td>
+                        <td class="border border-black px-2 py-2 text-justify">
+                            <?php echo htmlspecialchars($row['judul_laporan']); ?>
+                        </td>
+                        <td class="border border-black px-2 py-2 text-center font-bold text-xs">
+                            <?php 
+                                $st = strtoupper($row['status']);
+                                if($st == 'SELESAI') echo '✅ SELESAI';
+                                elseif($st == 'DIPROSES') echo '🔄 PROSES';
+                                else echo '⏳ PENDING';
+                            ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
 
-            <?php if ($filter_month && !empty($laporanList)): ?>
-                <!-- Ringkasan Statistik Laporan Bulanan -->
-                <div class="mt-8 grid grid-cols-3 gap-4 no-print-inside">
-                    <div class="p-3 border border-slate-200 text-center">
-                        <p class="text-[10px] uppercase text-slate-400 font-bold">Total Laporan</p>
-                        <p class="text-xl font-bold"><?php echo count($laporanList); ?></p>
-                    </div>
-                    <div class="p-3 border border-slate-200 text-center">
-                        <p class="text-[10px] uppercase text-slate-400 font-bold">Terselesaikan</p>
-                        <p class="text-xl font-bold">
-                            <?php echo count(array_filter($laporanList, fn($x) => $x['status'] == 'Selesai')); ?>
-                        </p>
-                    </div>
-                    <div class="p-3 border border-slate-200 text-center">
-                        <p class="text-[10px] uppercase text-slate-400 font-bold">Belum Tuntas</p>
-                        <p class="text-xl font-bold">
-                            <?php echo count(array_filter($laporanList, fn($x) => $x['status'] !== 'Selesai')); ?>
-                        </p>
-                    </div>
-                </div>
-            <?php endif; ?>
-        <?php endif; ?>
-
-        <!-- Tanda Tangan -->
-        <div class="mt-20 flex justify-end">
-            <div class="text-center w-72">
-                <p class="text-sm mb-20">Rancaekek, <?php echo date('d F Y'); ?></p>
-                <p class="font-bold border-b border-slate-800 pb-1"><?php echo htmlspecialchars($user['nama']); ?></p>
-                <p class="text-xs text-slate-500 mt-1 uppercase font-bold tracking-widest">Guru Bimbingan Konseling</p>
-                <p class="text-[10px] text-slate-400 mt-1">NIP. .....................................</p>
+            <div class="mt-4 text-sm font-sans">
+                <p><b>Total Data:</b> <?php echo count($laporanList); ?> Laporan</p>
             </div>
-        </div>
 
-        <div class="mt-10 border-t border-slate-100 pt-4 hidden print:block text-center text-[9px] text-slate-400 italic">
-            Dokumen ini bersifat rahasia dan dihasilkan secara otomatis melalui Sikonsel SMPN 4 Rancaekek pada <?php echo date('d/m/Y H:i'); ?>.
-        </div>
+            <div class="flex justify-end mt-10">
+                <div class="text-center w-60">
+                    <p>Mengetahui,</p>
+                    <p>Kepala Sekolah / Koordinator BK</p>
+                    <div class="h-20"></div>
+                    <p class="font-bold underline">( ..................................... )</p>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
+
+    <?php endif; ?>
 
 </body>
 </html>

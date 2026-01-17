@@ -1,5 +1,6 @@
 <?php
-// MUNDUR 3 LANGKAH
+// File: Sikonsel/views/admin/reservasi/kelola_jadwal.php
+
 require_once '../../../includes/auth.php';
 require_once '../../../includes/reservasi_controller.php';
 
@@ -15,10 +16,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action_id'])) {
     $id = $_POST['action_id'];
     $status = $_POST['action_status'];
     $catatan = $_POST['action_note'];
+    
+    // Pastikan fungsi updateStatusReservasi ada di controller
     if (updateStatusReservasi($conn, $id, $status, $catatan)) {
         $msg = "Status janji temu berhasil diperbarui.";
     }
 }
+
+// Ambil semua data reservasi terbaru
 $listJadwal = getAllReservasi($conn);
 ?>
 <!DOCTYPE html>
@@ -66,23 +71,32 @@ $listJadwal = getAllReservasi($conn);
                                 <div class="text-xs text-blue-600 font-bold"><?php echo date('H:i', strtotime($row['jam_temu'])); ?> WIB</div>
                             </td>
                             <td class="p-4">
-                                <div class="font-bold text-slate-800"><?php echo htmlspecialchars($row['nama_siswa']); ?></div>
+                                <div class="font-bold text-slate-800"><?php echo htmlspecialchars($row['nama_lengkap']); ?></div>
                                 <div class="text-xs text-slate-500 font-medium"><?php echo htmlspecialchars($row['kelas']); ?></div>
                             </td>
                             <td class="p-4 text-sm text-slate-600 font-medium"><?php echo htmlspecialchars($row['keperluan']); ?></td>
                             <td class="p-4">
                                 <?php 
-                                    $bgStatus = match($row['status']) {
-                                        'Menunggu' => 'bg-yellow-100 text-yellow-700',
+                                    // PERBAIKAN 1: Sesuaikan kata kunci dengan Database ('Pending')
+                                    // Jika status kosong/salah, kita anggap Pending biar aman
+                                    $statusDB = $row['status'] ?: 'Pending'; 
+
+                                    $bgStatus = match($statusDB) {
+                                        'Pending'   => 'bg-yellow-100 text-yellow-700', // SINKRONISASI DISINI
                                         'Disetujui' => 'bg-green-100 text-green-700',
-                                        'Ditolak' => 'bg-red-100 text-red-700',
-                                        default => 'bg-slate-100 text-slate-600'
+                                        'Ditolak'   => 'bg-red-100 text-red-700',
+                                        'Selesai'   => 'bg-blue-100 text-blue-700',
+                                        default     => 'bg-slate-100 text-slate-600'
                                     };
                                 ?>
-                                <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide <?= $bgStatus ?>"><?php echo $row['status']; ?></span>
+                                <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide <?= $bgStatus ?>"><?php echo $statusDB; ?></span>
                             </td>
                             <td class="p-4">
-                                <?php if ($row['status'] == 'Menunggu'): ?>
+                                <?php 
+                                // PERBAIKAN 2: Logic tombol muncul jika status 'Pending' (Bukan 'Menunggu')
+                                // Kita juga handle jika status kosong (data lama error)
+                                if ($row['status'] == 'Pending' || empty($row['status'])): 
+                                ?>
                                     <form method="POST" class="flex flex-col gap-2">
                                         <input type="hidden" name="action_id" value="<?= $row['id_reservasi'] ?>">
                                         <input type="text" name="action_note" placeholder="Tulis pesan/lokasi..." class="text-xs border border-slate-300 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500" value="<?= htmlspecialchars($row['catatan_guru'] ?? '') ?>">

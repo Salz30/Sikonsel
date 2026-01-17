@@ -1,30 +1,9 @@
 <?php
+// File: Sikonsel/includes/siswa_controller.php
 require_once __DIR__ . '/../config/database.php';
 
-/**
- * Ambil Semua Data Siswa
- * Perbaikan: Mengambil nama_lengkap dari tabel users (JOIN)
- */
-function getAllSiswa($conn) {
-    try {
-        $sql = "SELECT siswa.*, users.username, users.nama_lengkap 
-                FROM siswa 
-                JOIN users ON siswa.user_id = users.id_user 
-                ORDER BY users.nama_lengkap ASC";
-        $stmt = $conn->prepare($sql);
-        $stmt->execute();
-        return $stmt->fetchAll();
-    } catch (PDOException $e) {
-        return [];
-    }
-}
-
-/**
- * Ambil Satu Data Siswa
- */
 function getSiswaById($conn, $id) {
-    // Perbaikan: Ambil nama dari tabel users juga
-    $sql = "SELECT siswa.*, users.nama_lengkap 
+    $sql = "SELECT siswa.*, users.nama_lengkap, users.username 
             FROM siswa 
             JOIN users ON siswa.user_id = users.id_user 
             WHERE siswa.id_siswa = ?";
@@ -33,50 +12,23 @@ function getSiswaById($conn, $id) {
     return $stmt->fetch();
 }
 
-/**
- * Tambah Siswa Baru
- * Perbaikan: Menghapus insert 'nama_lengkap' ke tabel siswa (karena kolomnya tidak ada)
- * Perbaikan: Return pesan error spesifik jika gagal
- */
-function tambahSiswa($conn, $data) {
-    try {
-        $conn->beginTransaction();
-
-        // 1. Buat Akun User (Simpan Nama di sini)
-        // Password default adalah NISN
-        $passwordHash = password_hash($data['nisn'], PASSWORD_BCRYPT);
-        
-        $stmtUser = $conn->prepare("INSERT INTO users (username, password, role, nama_lengkap) VALUES (?, ?, 'siswa', ?)");
-        $stmtUser->execute([$data['nisn'], $passwordHash, $data['nama']]);
-        
-        $userId = $conn->lastInsertId();
-
-        // 2. Buat Profil Siswa (JANGAN masukkan nama_lengkap ke sini)
-        $stmtSiswa = $conn->prepare("INSERT INTO siswa (user_id, nisn, kelas, alamat) VALUES (?, ?, ?, ?)");
-        $stmtSiswa->execute([$userId, $data['nisn'], $data['kelas'], $data['alamat']]);
-
-        $conn->commit();
-        return ["success" => true];
-
-    } catch (Exception $e) {
-        $conn->rollBack();
-        // Kembalikan pesan error asli dari database untuk debugging
-        return ["success" => false, "message" => $e->getMessage()];
-    }
-}
-
-/**
- * Update Siswa
- */
 function updateSiswa($conn, $id, $data) {
     try {
         $conn->beginTransaction();
+        if (!is_numeric($data['nisn'])) {
+            return ["success" => false, "message" => "NISN harus berupa angka!"];
+        }
 
-        // 1. Update tabel siswa
-        $stmt = $conn->prepare("UPDATE siswa SET nisn = ?, kelas = ?, alamat = ? WHERE id_siswa = ?");
-        $stmt->execute([$data['nisn'], $data['kelas'], $data['alamat'], $id]);
+        $stmtSiswa = $conn->prepare("UPDATE siswa SET nisn = ?, kelas = ?, alamat = ?, nama_ortu = ?, no_hp_ortu = ? WHERE id_siswa = ?");
+        $stmtSiswa->execute([
+            $data['nisn'], 
+            $data['kelas'], 
+            $data['alamat'], 
+            $data['nama_ortu'],   
+            $data['no_hp_ortu'],  
+            $id
+        ]);
         
-        // 2. Update tabel users (Nama & Username/NISN)
         $getIds = $conn->prepare("SELECT user_id FROM siswa WHERE id_siswa = ?");
         $getIds->execute([$id]);
         $row = $getIds->fetch();
@@ -95,48 +47,102 @@ function updateSiswa($conn, $id, $data) {
     }
 }
 
-/**
- * Hapus Satu Siswa (Beserta User-nya)
- */
+function getAllSiswa($conn) {
+    try {
+        $sql = "SELECT s.*, u.username, u.nama_lengkap 
+                FROM siswa s 
+                JOIN users u ON s.user_id = u.id_user 
+                ORDER BY u.nama_lengkap ASC";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
 function deleteSiswa($conn, $id_siswa) {
+    try {
+        $stmt = $conn->prepare("SELECT user_id FROM siswa WHERE id_siswa = ?");
+        $stmt->execute([$id_siswa]);
+        $row = $stmt->fetch();
+
+        if ($row) {
+            $del = $conn->prepare("DELETE FROM users WHERE id_user = ?");
+            return $del->execute([$row['user_id']]);
+        }
+        return false;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+function deleteBulkSiswa($conn, $ids) {
+    try {
+        $conn->beginTransaction(); 
+        foreach ($ids as $id) {
+            deleteSiswa($conn, $id);
+        }
+        $conn->commit(); 
+        return true;
+    } catch (Exception $e) {
+        $conn->rollBack(); 
+        return false;
+    }
+}
+
+// --- MODIFIKASI UTAMA DI SINI ---
+function tambahSiswa($conn, $data) {
     try {
         $conn->beginTransaction();
 
-        // 1. Ambil user_id sebelum data siswa dihapus
-        $stmtGet = $conn->prepare("SELECT user_id FROM siswa WHERE id_siswa = ?");
-        $stmtGet->execute([$id_siswa]);
-        $row = $stmtGet->fetch();
-
-        if ($row) {
-            // 2. Hapus data di tabel SISWA dulu (karena Foreign Key)
-            $stmtSiswa = $conn->prepare("DELETE FROM siswa WHERE id_siswa = ?");
-            $stmtSiswa->execute([$id_siswa]);
-
-            // 3. Hapus data di tabel USERS (Login)
-            $stmtUser = $conn->prepare("DELETE FROM users WHERE id_user = ?");
-            $stmtUser->execute([$row['user_id']]);
+        // 1. VALIDASI BACKEND: Pastikan NISN hanya angka
+        if (!is_numeric($data['nisn'])) {
+            return ["success" => false, "message" => "NISN harus berupa angka!"];
         }
+
+        // 2. Cek Username (NISN) Kembar
+        $cek = $conn->prepare("SELECT id_user FROM users WHERE username = ?");
+        $cek->execute([$data['nisn']]);
+        if ($cek->fetch()) {
+            return ["success" => false, "message" => "NISN sudah terdaftar!"];
+        }
+
+        // 3. KONSEP BARU: Password Default '123456'
+        $defaultPassword = '123456'; 
+        $passwordHash = password_hash($defaultPassword, PASSWORD_DEFAULT);
+        
+        $role = 'siswa';
+        
+        // Insert ke tabel USERS
+        $sqlUser = "INSERT INTO users (username, password, role, nama_lengkap) VALUES (?, ?, ?, ?)";
+        $stmtUser = $conn->prepare($sqlUser);
+        $stmtUser->execute([
+            $data['nisn'],
+            $passwordHash, // Password hash dari '123456'
+            $role,
+            $data['nama']
+        ]);
+        
+        $newUserId = $conn->lastInsertId();
+
+        // Insert ke tabel SISWA
+        $sqlSiswa = "INSERT INTO siswa (user_id, nisn, kelas, alamat, nama_ortu, no_hp_ortu) VALUES (?, ?, ?, ?, ?, ?)";
+        $stmtSiswa = $conn->prepare($sqlSiswa);
+        $stmtSiswa->execute([
+            $newUserId,
+            $data['nisn'],
+            $data['kelas'],
+            $data['alamat'],
+            $data['nama_ortu'] ?? null, 
+            $data['no_hp_ortu'] ?? null
+        ]);
 
         $conn->commit();
-        return true;
-    } catch (PDOException $e) {
-        $conn->rollBack();
-        return false;
-    }
-}
+        return ["success" => true];
 
-/**
- * Hapus Banyak Siswa Sekaligus (Bulk Delete)
- */
-function deleteBulkSiswa($conn, $ids_array) {
-    try {
-        // Looping deleteSiswa agar logic user_id nya tetap jalan
-        foreach ($ids_array as $id) {
-            deleteSiswa($conn, $id);
-        }
-        return true;
     } catch (Exception $e) {
-        return false;
+        $conn->rollBack();
+        return ["success" => false, "message" => "Error Sistem: " . $e->getMessage()];
     }
 }
-?>

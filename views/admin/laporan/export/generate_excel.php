@@ -1,9 +1,10 @@
 <?php
 /**
- * Generate Excel Laporan BK
+ * Generate pdf dan Excel Laporan BK
  * Mendukung: Filter Status, Nama, dan Bulanan (Sinkron dengan export.php).
  */
 require_once '../../../../includes/auth.php';
+require_once '../../../../includes/encryption.php';
 require_once '../../../../includes/laporan_controller.php';
 
 $user = checkLogin();
@@ -45,6 +46,11 @@ $stmt = $conn->prepare($query);
 $stmt->execute($params);
 $laporanList = $stmt->fetchAll();
 
+// Dekripsi data
+foreach ($laporanList as $key => $row) {
+    $laporanList[$key]['judul_laporan'] = decryptData($row['judul_laporan']);
+}
+
 // Header Excel agar browser mendownload file sebagai .xls
 header("Content-Type: application/vnd.ms-excel");
 header("Content-Disposition: attachment; filename=Rekap_BK_Sikonsel_".date('Ymd_His').".xls");
@@ -74,7 +80,6 @@ header("Expires: 0");
             <th>Nama Siswa</th>
             <th>Kategori</th>
             <th>Judul Masalah</th>
-            <th>Isi Pesan (Teks Asli)</th>
             <th>Status Akhir</th>
         </tr>
     </thead>
@@ -85,17 +90,14 @@ header("Expires: 0");
             echo "<tr><td colspan='8' style='text-align:center;'>Tidak ada data laporan ditemukan.</td></tr>";
         } else {
             foreach ($laporanList as $row): 
-                // Dekripsi data secara otomatis untuk laporan Excel
-                $isi_asli = decryptData($row['isi_laporan']);
         ?>
         <tr>
             <td style="text-align: center;"><?php echo $no++; ?></td>
             <td style="text-align: center;"><?php echo date('d/m/Y H:i', strtotime($row['tgl_laporan'])); ?></td>
-            <td style="mso-number-format:'\@';"><?php echo $row['nisn']; ?></td> <!-- Trik agar NISN tidak terbaca angka saintifik -->
+            <td style="mso-number-format:'\@';"><?php echo $row['nisn']; ?></td>
             <td><?php echo htmlspecialchars($row['nama_siswa']); ?></td>
             <td><?php echo htmlspecialchars($row['kategori']); ?></td>
             <td><?php echo htmlspecialchars($row['judul_laporan']); ?></td>
-            <td><?php echo htmlspecialchars($isi_asli); ?></td>
             <td style="text-align: center; font-weight: bold;"><?php echo strtoupper($row['status']); ?></td>
         </tr>
         <?php endforeach; 

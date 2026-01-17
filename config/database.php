@@ -5,9 +5,9 @@
  */
 
 $host = "localhost";
-$db_name = "db_sikonsel_rancaekek";
+$db_name = "sikonsel_bk_rancaekek";
 $username = "root";
-$password = "";
+$password = "xxxxxxxxxxxxxxxxxxxx";
 
 try {
     $conn = new PDO("mysql:host=$host;dbname=$db_name", $username, $password);

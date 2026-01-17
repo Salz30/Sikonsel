@@ -2,6 +2,7 @@
 // Path: views/siswa/reservasi/ajukan_jadwal.php
 require_once '../../../includes/auth.php';
 require_once '../../../includes/reservasi_controller.php';
+require_once '../../../includes/encryption.php';
 
 $user = checkLogin();
 
@@ -11,14 +12,7 @@ $stmt->execute([$user['user_id']]);
 $siswa = $stmt->fetch();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $data = [
-        'id_siswa' => $siswa['id_siswa'],
-        'tanggal' => $_POST['tanggal'],
-        'jam' => $_POST['jam'],
-        'keperluan' => $_POST['keperluan']
-    ];
-
-    if (tambahReservasi($conn, $data)) {
+    if (insertReservasi($conn, $siswa['id_siswa'], $_POST['tanggal'], $_POST['jam'], $_POST['keperluan'])) {
         // Redirect ke file JADWAL yang baru
         header("Location: jadwal_saya.php?msg=success");
         exit;

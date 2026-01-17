@@ -1,19 +1,34 @@
 <?php
-// Path: views/siswa/reservasi/jadwal_saya.php
+// File: Sikonsel/views/siswa/reservasi/jadwal_saya.php
+
+session_start();
+// Pastikan path ini sesuai dengan struktur folder Anda
+require_once '../../../config/database.php';
 require_once '../../../includes/auth.php';
+require_once '../../../includes/encryption.php';
+
+// 1. Cek Login
+$user = checkLogin('../../../views/auth/login.php');
+
+// 2. Panggil Controller
 require_once '../../../includes/reservasi_controller.php';
 
-$user = checkLogin();
-
-// Ambil ID Siswa
+// --- PERBAIKAN: AMBIL ID_SISWA DARI DATABASE ---
+// Karena di session cuma ada user_id, kita cari id_siswa-nya manual
 $stmt = $conn->prepare("SELECT id_siswa FROM siswa WHERE user_id = ?");
 $stmt->execute([$user['user_id']]);
-$siswa = $stmt->fetch();
+$dataSiswa = $stmt->fetch(PDO::FETCH_ASSOC);
 
-$listReservasi = [];
-if ($siswa) {
-    $listReservasi = getReservasiBySiswa($conn, $siswa['id_siswa']);
+if (!$dataSiswa) {
+    echo "<center><h3>Error: Data siswa tidak ditemukan! <br>Pastikan akun ini sudah terhubung dengan data siswa.</h3></center>";
+    exit;
 }
+
+$id_siswa = $dataSiswa['id_siswa'];
+// ------------------------------------------------
+
+// 3. Ambil Data Reservasi
+$reservasiList = getReservasiBySiswa($conn, $id_siswa);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -54,9 +69,9 @@ if ($siswa) {
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    <?php if (empty($listReservasi)): ?>
+                    <?php if (empty($reservasiList)): ?>
                         <tr><td colspan="4" class="p-8 text-center text-slate-400">Belum ada jadwal.</td></tr>
-                    <?php else: foreach ($listReservasi as $row): ?>
+                    <?php else: foreach ($reservasiList as $row): ?>
                         <tr class="hover:bg-slate-50">
                             <td class="p-4">
                                 <div class="font-bold text-slate-700"><?php echo date('d M Y', strtotime($row['tgl_temu'])); ?></div>
@@ -65,14 +80,17 @@ if ($siswa) {
                             <td class="p-4 text-sm text-slate-600"><?= htmlspecialchars($row['keperluan']); ?></td>
                             <td class="p-4">
                                 <?php 
-                                $color = match($row['status']) {
-                                    'Menunggu' => 'bg-yellow-100 text-yellow-700',
-                                    'Disetujui' => 'bg-green-100 text-green-700',
-                                    'Ditolak' => 'bg-red-100 text-red-700',
-                                    'Selesai' => 'bg-slate-100 text-slate-700',
-                                };
+                                $statusClass = 'bg-yellow-100 text-yellow-700'; // Default Menunggu
+                                
+                                if ($row['status'] == 'Disetujui') {
+                                    $statusClass = 'bg-green-100 text-green-700';
+                                } elseif ($row['status'] == 'Ditolak') {
+                                    $statusClass = 'bg-red-100 text-red-700';
+                                } elseif ($row['status'] == 'Selesai') {
+                                    $statusClass = 'bg-slate-100 text-slate-700';
+                                }
                                 ?>
-                                <span class="px-3 py-1 rounded-full text-xs font-bold <?= $color ?>"><?= $row['status']; ?></span>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold <?= $statusClass ?>"><?= $row['status']; ?></span>
                             </td>
                             <td class="p-4 text-sm text-slate-500 italic">
                                 <?= $row['catatan_guru'] ? htmlspecialchars($row['catatan_guru']) : '-'; ?>

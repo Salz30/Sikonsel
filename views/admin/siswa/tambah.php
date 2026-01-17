@@ -1,4 +1,5 @@
 <?php
+// views/admin/siswa/tambah.php
 require_once '../../../includes/auth.php';
 require_once '../../../includes/siswa_controller.php';
 checkLogin();
@@ -16,15 +17,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $result = tambahSiswa($conn, $data);
 
     if ($result['success']) {
-        header("Location: index.php?msg=added");
+        header("Location: list_siswa.php?msg=added");
         exit;
     } else {
-        // Tampilkan pesan error asli dari database
+        // Tampilkan pesan error
         $error = "Gagal: " . $result['message'];
     }
 }
 ?>
-<!-- ... (Sisa kode HTML ke bawah biarkan sama) ... -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -45,15 +45,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <?php endif; ?>
 
         <form method="POST" class="space-y-4">
-            <!-- Form Input (Sama seperti sebelumnya) -->
             <div>
-                <label class="block text-sm font-bold text-slate-700 mb-1">NISN (Sebagai Username)</label>
-                <input type="text" name="nisn" required class="w-full border rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                <label class="block text-sm font-bold text-slate-700 mb-1">NISN (Hanya Angka)</label>
+                <input type="text" 
+                       name="nisn" 
+                       required 
+                       inputmode="numeric" 
+                       pattern="[0-9]*"
+                       maxlength="20"
+                       oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                       placeholder="Contoh: 0056789012"
+                       class="w-full border rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                <p class="text-[10px] text-slate-400 mt-1">*Digunakan sebagai Username Login. Password default: <b>123456</b></p>
             </div>
+
             <div>
                 <label class="block text-sm font-bold text-slate-700 mb-1">Nama Lengkap</label>
                 <input type="text" name="nama" required class="w-full border rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
+
             <div>
                 <label class="block text-sm font-bold text-slate-700 mb-1">Kelas</label>
                 <select name="kelas" class="w-full border rounded-lg p-3 bg-white">
@@ -62,6 +72,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <option>IX-A</option><option>IX-B</option>
                 </select>
             </div>
+
             <div>
                 <label class="block text-sm font-bold text-slate-700 mb-1">Alamat</label>
                 <textarea name="alamat" rows="3" class="w-full border rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>

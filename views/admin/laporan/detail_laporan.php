@@ -81,7 +81,7 @@ if (!$laporan) {
                         <div class="flex justify-between items-start">
                             <div>
                                 <h2 class="text-2xl font-bold text-slate-800 leading-tight">
-                                    <?= htmlspecialchars($laporan['judul_laporan']) ?>
+                                    <?= htmlspecialchars(decryptData($laporan['judul_laporan'])) ?>
                                 </h2>
                                 <div class="flex items-center gap-3 mt-3">
                                     <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wide">

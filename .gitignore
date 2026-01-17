@@ -1,0 +1,17 @@
+# ABAIKAN FILE RAHASIA
+config/database.php
+connect.php
+koneksi.php
+
+# ABAIKAN SAMPAH SYSTEM
+error_log
+.DS_Store
+Thumbs.db
+
+# ABAIKAN UPLOAD USER (Agar repo tidak berat)
+assets/uploads/
+uploads/
+
+# ABAIKAN FILE EDITOR
+.vscode/
+.idea/

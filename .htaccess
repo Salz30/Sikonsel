@@ -1,0 +1,31 @@
+# File: Sikonsel/.htaccess
+
+# 1. KEAMANAN DASAR
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # --- PERBAIKAN PENTING UNTUK MOBILE ---
+    # Jangan ubah-ubah permintaan yang menuju folder /api
+    # Ini menjamin Mobile App dapat akses langsung tanpa gangguan
+    RewriteRule ^api - [L]
+    # --------------------------------------
+
+    # A. Mencegah akses langsung ke folder sistem
+    RewriteRule ^(includes|config|database) - [F,L]
+
+    # B. Routing Website (Hanya untuk Browser)
+    RewriteRule ^login/?$ views/auth/login.php [QSA,L]
+    RewriteRule ^logout/?$ views/auth/logout.php [QSA,L]
+    RewriteRule ^dashboard-siswa/?$ views/siswa/dashboard_siswa.php [QSA,L]
+    RewriteRule ^dashboard-admin/?$ views/admin/dashboard_admin.php [QSA,L]
+
+    # C. Hilangkan ekstensi .php (Hanya jika bukan folder API)
+    RewriteCond %{REQUEST_URI} !^/api
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}\.php -f
+    RewriteRule ^(.*)$ $1.php [QSA,L]
+
+</IfModule>

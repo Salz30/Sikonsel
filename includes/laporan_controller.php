@@ -34,7 +34,15 @@ function getLaporanBySiswa($conn, $id_siswa) {
     
     $stmt = $conn->prepare($sql);
     $stmt->execute([$id_siswa]);
-    return $stmt->fetchAll();
+    $result = $stmt->fetchAll();
+
+    // Loop untuk membuka kunci (Decrypt) setiap baris data
+    foreach ($result as $key => $row) {
+        $result[$key]['judul_laporan'] = decryptData($row['judul_laporan']);
+        $result[$key]['isi_laporan_dekripsi'] = decryptData($row['isi_laporan']);
+    }
+
+    return $result;
 }
 
 /**
@@ -56,7 +64,8 @@ function getLaporanById($conn, $id) {
     $laporan = $stmt->fetch();
 
     if ($laporan) {
-        // Dekripsi isi laporan
+        // Dekripsi Judul & Isi agar bisa dibaca manusia
+        $laporan['judul_laporan'] = decryptData($laporan['judul_laporan']);
         $laporan['isi_laporan_dekripsi'] = decryptData($laporan['isi_laporan']);
     }
 
@@ -68,7 +77,9 @@ function getLaporanById($conn, $id) {
  */
 function tambahLaporan($conn, $data) {
     try {
+        // Enkripsi Isi & Judul
         $isiTerenkripsi = encryptData($data['isi']);
+        $judulTerenkripsi = encryptData($data['judul']);
 
         $sql = "INSERT INTO laporan_bk (id_siswa, judul_laporan, isi_laporan, kategori, status, tgl_laporan) 
                 VALUES (?, ?, ?, ?, 'Pending', NOW())";
@@ -76,7 +87,7 @@ function tambahLaporan($conn, $data) {
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             $data['id_siswa'], 
-            $data['judul'], 
+            $judulTerenkripsi,
             $isiTerenkripsi,
             $data['kategori']
         ]);
