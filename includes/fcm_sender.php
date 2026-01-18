@@ -1,7 +1,7 @@
 <?php
 function sendPushNotification($targetToken, $title, $body) {
     // GANTI DENGAN SERVER KEY FIREBASE ANDA (Dari Firebase Console)
-    $serverKey = 'AAAA.... (Server Key Panjang Anda)'; 
+    $serverKey = 'BN0GXngX-4BqunJrWSJmVkT3wsMdiqfgHjKD-xumqmjSmCcitmHcQ_fXJzryKnCqxS_jmKkZHDl9i5Dc-GGbeSE'; 
     
     $url = "https://fcm.googleapis.com/fcm/send";
     

@@ -1,100 +1,110 @@
 <?php
-// Path: views/siswa/laporan/detail_laporan.php
-// Mundur 3 langkah: laporan -> siswa -> views -> root
+/**
+ * File: Sikonsel/views/siswa/laporan/detail_laporan.php
+ * Perbaikan: Mengganti validasi akses dari username ke id_siswa (Sesuai DB).
+ */
+
+session_start();
+require_once '../../../config/database.php';
 require_once '../../../includes/auth.php';
-require_once '../../../includes/laporan_controller.php';
+require_once '../../../includes/encryption.php';
 
-$user = checkLogin();
-$id = $_GET['id'] ?? null;
+// 1. Cek Login & Timeout (10 Menit)
+$user = checkLogin('../../../views/auth/login.php');
 
-// Jika tidak ada ID, kembalikan ke riwayat
-if (!$id) { 
-    header("Location: riwayat_saya.php"); 
-    exit; 
+// 2. Ambil ID Siswa dari session (Sesuai kolom user_id di tabel siswa)
+$id_user_session = $_SESSION['user_id'];
+$stmt_siswa = $conn->prepare("SELECT id_siswa FROM siswa WHERE user_id = ?");
+$stmt_siswa->execute([$id_user_session]);
+$siswa = $stmt_siswa->fetch(PDO::FETCH_ASSOC);
+$id_siswa_login = ($siswa) ? $siswa['id_siswa'] : 0;
+
+// 3. Ambil Detail Laporan
+$id_laporan = $_GET['id'] ?? null;
+if (!$id_laporan) {
+    header("Location: riwayat_saya.php");
+    exit;
 }
 
-$laporan = getLaporanById($conn, $id);
+$stmt = $conn->prepare("SELECT l.*, s.nama_lengkap FROM laporan_bk l JOIN siswa s ON l.id_siswa = s.id_siswa WHERE l.id_laporan = ?");
+$stmt->execute([$id_laporan]);
+$laporan = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// 1. Cek apakah laporan ada
-if (!$laporan) { 
-    die("Laporan tidak ditemukan."); 
+// 4. Validasi Keberadaan Laporan
+if (!$laporan) {
+    header("Location: riwayat_saya.php?msg=laporan_tidak_ditemukan");
+    exit;
 }
 
-// 2. Keamanan: Pastikan siswa hanya bisa melihat laporannya sendiri
-// Cek apakah NISN di laporan sama dengan Username user yang login
-if ($user['role'] == 'siswa' && $laporan['nisn'] !== $user['username']) {
-    die("⛔ AKSES DITOLAK: Ini bukan laporan Anda.");
+// 5. VALIDASI AKSES (PENGGANTI LOGIKA USERNAME YANG ERROR)
+// Pastikan id_siswa di laporan sama dengan id_siswa yang sedang login
+if ($laporan['id_siswa'] != $id_siswa_login) {
+    header("Location: riwayat_saya.php?msg=tidak_ada_akses");
+    exit;
 }
+
+// Dekripsi isi laporan untuk ditampilkan
+$isi_laporan = decryptData($laporan['isi_laporan']);
 ?>
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Detail Laporan</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detail Laporan | Sikonsel</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <style>body { font-family: 'Poppins', sans-serif; }</style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body class="bg-slate-50 min-h-screen">
-    
-    <nav class="bg-white border-b px-8 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
-        <div class="flex items-center gap-4">
-            <a href="riwayat_saya.php" class="text-slate-500 hover:text-blue-600 font-medium transition">← Riwayat</a>
-            <h1 class="text-xl font-bold text-slate-800">Detail Laporan</h1>
-        </div>
-    </nav>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8">
 
-    <div class="max-w-3xl mx-auto p-6 sm:p-10">
-        <a href="riwayat_saya.php" class="inline-flex items-center text-slate-400 hover:text-blue-600 font-bold text-xs mb-6 transition">
-            <span class="mr-2">←</span> KEMBALI KE RIWAYAT
+    <div class="max-w-3xl mx-auto">
+        <a href="riwayat_saya.php" class="inline-flex items-center text-indigo-600 hover:text-indigo-800 mb-6 transition">
+            <i class="fas fa-arrow-left mr-2"></i> Kembali ke Riwayat
         </a>
 
-        <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
-            <div class="bg-slate-50/50 px-8 py-8 border-b border-slate-100">
-                <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-[10px] font-bold uppercase tracking-wider mb-2 inline-block">
-                    <?= htmlspecialchars($laporan['kategori']); ?>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h2 class="text-xl font-bold text-slate-800">Detail Laporan BK</h2>
+                <span class="px-3 py-1 rounded-full text-xs font-bold uppercase 
+                    <?= $laporan['status'] == 'Selesai' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700' ?>">
+                    <?= $laporan['status'] ?>
                 </span>
-                <h1 class="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
-                    <?= htmlspecialchars($laporan['judul_laporan']); ?>
-                </h1>
-                <p class="text-slate-400 text-sm mt-2">
-                    <?= date('d M Y, H:i', strtotime($laporan['tgl_laporan'])); ?> WIB
-                </p>
             </div>
 
-            <div class="p-8">
-                <div class="mb-10">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Isi Curhatan Kamu (Terenkripsi)</label>
-                    <div class="bg-white p-6 rounded-2xl border-2 border-blue-50 text-slate-700 leading-relaxed shadow-inner">
-                        <?= nl2br(htmlspecialchars($laporan['isi_laporan_dekripsi'])); ?>
+            <div class="p-8 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Kategori Masalah</label>
+                        <p class="text-slate-700 font-medium"><?= htmlspecialchars($laporan['kategori']) ?></p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Tanggal Laporan</label>
+                        <p class="text-slate-700 font-medium"><?= date('d F Y', strtotime($laporan['tgl_laporan'])) ?></p>
                     </div>
                 </div>
 
-                <div class="pt-8 border-t border-slate-50">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Status Respon Guru BK</label>
-                    <?php 
-                        $statusClass = match($laporan['status']) {
-                            'Pending' => 'bg-yellow-50 text-yellow-700 border-yellow-200',
-                            'Diproses' => 'bg-blue-50 text-blue-700 border-blue-200',
-                            'Selesai' => 'bg-green-50 text-green-700 border-green-200',
-                            default => 'bg-slate-50'
-                        };
-                        $pesan = match($laporan['status']) {
-                            'Pending' => 'Laporanmu sudah masuk sistem. Mohon tunggu, Guru BK akan segera membacanya.',
-                            'Diproses' => 'Laporan sedang ditindaklanjuti. Kamu mungkin akan dipanggil ke ruang BK atau dihubungi.',
-                            'Selesai' => 'Sesi konseling untuk masalah ini telah dinyatakan selesai.',
-                            default => '-'
-                        };
-                    ?>
-                    <div class="flex flex-col sm:flex-row gap-4 p-4 rounded-2xl border <?= $statusClass ?>">
-                        <div class="font-bold text-lg uppercase tracking-wider self-start sm:self-center">
-                            <?= htmlspecialchars($laporan['status']); ?>
-                        </div>
-                        <div class="text-xs opacity-90 border-l border-current/20 pl-4 leading-relaxed">
-                            <?= $pesan; ?>
-                        </div>
+                <div class="pt-4 border-t border-slate-100">
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Isi Laporan / Curhatan</label>
+                    <div class="bg-slate-50 p-4 rounded-xl text-slate-700 leading-relaxed italic border border-slate-100">
+                        "<?= nl2br(htmlspecialchars($isi_laporan)) ?>"
                     </div>
                 </div>
+
+                <?php if ($laporan['tanggapan']): ?>
+                    <div class="pt-4 border-t-2 border-dashed border-indigo-100">
+                        <label class="block text-xs font-bold text-indigo-600 uppercase mb-2">
+                            <i class="fas fa-reply mr-1"></i> Tanggapan Guru BK
+                        </label>
+                        <div class="bg-indigo-50 p-4 rounded-xl text-indigo-900 border border-indigo-100">
+                            <?= nl2br(htmlspecialchars($laporan['tanggapan'])) ?>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="pt-4 text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p class="text-sm text-slate-400">Belum ada tanggapan dari Guru BK.</p>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

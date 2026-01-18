@@ -1,106 +1,78 @@
 <?php
 /**
  * File: Sikonsel/includes/auth.php
- * Solusi: Menggabungkan Session (Utama) dan Cookie (Cadangan/Syarat Ujian)
+ * Solusi: Murni menggunakan Session dengan fitur Auto-Logout 10 Menit.
+ * Keamanan: Menghapus fitur cookie permanen untuk mencegah akses tidak sah.
  */
 
 require_once __DIR__ . '/../config/database.php';
 
-// 1. Mulai Session (Wajib ada di setiap halaman)
+// 1. Mulai Session
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Kunci Rahasia untuk Enkripsi Cookie (Syarat Keamanan Sederhana)
-define('AUTH_KEY', 'kunci_rahasia_sikonsel_2026');
-
 /**
  * Fungsi checkLogin
- * Logika: Cek Session dulu -> Kalau kosong, baru Cek Cookie -> Kalau kosong semua, Tendang.
+ * Logika: Cek Timeout -> Cek Session -> Jika gagal, Tendang.
  */
 function checkLogin($redirectPath = '../auth/login.php') {
-    global $conn;
-
-    // TAHAP 1: Cek Session (Cara paling cepat & stabil)
+    // --- LOGIKA TIMEOUT 5 MENIT (300 DETIK) ---
+    $timeout_duration = 300; 
+    
     if (isset($_SESSION['user_id'])) {
-        // Session valid, user boleh lewat.
-        // Opsional: Bisa ambil data terbaru dari DB jika perlu
-        return $_SESSION;
-    }
-
-    // TAHAP 2: Cek Cookie (Fitur "Remember Me" / Syarat Ujian)
-    // Dijalankan HANYA jika Session kosong (misal browser baru dibuka)
-    if (isset($_COOKIE['sikonsel_ingat_saya'])) {
-        $cookieValue = $_COOKIE['sikonsel_ingat_saya'];
-        
-        // Dekripsi Cookie sederhana: ID:HASH
-        $decoded = base64_decode($cookieValue);
-        $parts = explode(':', $decoded);
-        
-        if (count($parts) === 2) {
-            $id_user = $parts[0];
-            $hash_validasi = $parts[1];
-            
-            // Verifikasi keaslian cookie (agar tidak bisa dipalsukan)
-            $hash_seharusnya = md5($id_user . AUTH_KEY);
-            
-            if ($hash_validasi === $hash_seharusnya) {
-                // COOKIE VALID! Restore Session (Auto Login)
-                // Kita perlu ambil data role dari DB untuk set session
-                try {
-                    $stmt = $conn->prepare("SELECT * FROM users WHERE id_user = ?");
-                    $stmt->execute([$id_user]);
-                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
-                    if ($user) {
-                        // Kembalikan nyawa session
-                        $_SESSION['user_id'] = $user['id_user'];
-                        $_SESSION['role']    = $user['role'];
-                        $_SESSION['nama']    = $user['nama_lengkap'];
-                        return $user; // Login berhasil via Cookie
-                    }
-                } catch (Exception $e) {
-                    // Ignore error, lanjut redirect
-                }
+        if (isset($_SESSION['last_activity'])) {
+            $elapsed_time = time() - $_SESSION['last_activity'];
+            if ($elapsed_time > $timeout_duration) {
+                // Sesi kedaluwarsa karena tidak ada aktivitas
+                logout();
+                header("Location: " . $redirectPath . "?msg=sesi_berakhir");
+                exit();
             }
         }
+        // Perbarui waktu aktivitas terakhir setiap kali halaman diakses
+        $_SESSION['last_activity'] = time();
+        return $_SESSION;
     }
+    // -------------------------------------------
 
-    // TAHAP 3: Gagal Semua (Belum Login)
-    // Redirect ke halaman login dengan pesan error
+    // Jika tidak ada session user_id, redirect ke login
     header("Location: " . $redirectPath . "?msg=belum_login");
     exit();
 }
 
 /**
- * Fungsi setAppLogin (PENTING!)
- * Panggil fungsi ini di login.php saat username & password benar.
- * Fungsi ini yang akan membuat Session DAN Cookie sekaligus.
+ * Fungsi setAppLogin
+ * Hanya membuat Session dan mencatat waktu awal aktivitas.
  */
 function setAppLogin($user) {
-    // 1. Set Session (Wajib)
+    // Set data identitas ke dalam Session
     $_SESSION['user_id'] = $user['id_user'];
     $_SESSION['role']    = $user['role'];
     $_SESSION['nama']    = $user['nama_lengkap'];
     
-    // 2. Set Cookie (Syarat Ujian)
-    // Format: ID_USER : MD5(ID + KUNCI) -> di-Base64 biar rapi
-    $cookieIsi = base64_encode($user['id_user'] . ':' . md5($user['id_user'] . AUTH_KEY));
-    
-    // Simpan Cookie selama 30 Hari
-    setcookie('sikonsel_ingat_saya', $cookieIsi, time() + (86400 * 30), "/");
+    // Set waktu awal aktivitas untuk logika timeout
+    $_SESSION['last_activity'] = time();
 }
 
 /**
  * Fungsi logout
- * Hapus Session dan Cookie sampai bersih.
+ * Menghapus semua data sesi sampai bersih.
  */
 function logout() {
-    // Hapus Session
-    session_unset();
+    // Hapus semua variabel session
+    $_SESSION = array();
+
+    // Hapus cookie session (PHPSESSID) dari browser
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+
+    // Hancurkan session di server
     session_destroy();
-    
-    // Hapus Cookie
-    setcookie('sikonsel_ingat_saya', '', time() - 3600, "/");
 }
 ?>

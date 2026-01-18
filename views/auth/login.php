@@ -7,18 +7,14 @@ require_once '../../includes/auth.php';
 // Cek apakah user sudah login? (Cek Session & Cookie)
 // Kita panggil fungsi checkLogin() tapi dengan mode 'silent' (tidak redirect jika gagal)
 // Tujuannya hanya untuk redirect user yang SUDAH login agar tidak bisa buka halaman login lagi.
-if (isset($_SESSION['user_id']) || isset($_COOKIE['sikonsel_ingat_saya'])) {
-    // Coba validasi login otomatis
-    $userData = checkLogin(); 
-    if (isset($userData['user_id'])) {
-         // Jika valid, lempar ke dashboard
-        if ($userData['role'] == 'guru_bk' || $userData['role'] == 'admin') {
-            header("Location: ../admin/dashboard_admin.php");
-        } else {
-            header("Location: ../siswa/dashboard_siswa.php");
-        }
-        exit;
+if (isset($_SESSION['user_id'])) {
+    // Jika ada session, langsung arahkan ke dashboard masing-masing
+    if ($_SESSION['role'] == 'guru_bk' || $_SESSION['role'] == 'admin') {
+        header("Location: ../admin/dashboard_admin.php");
+    } else {
+        header("Location: ../siswa/dashboard_siswa.php");
     }
+    exit;
 }
 
 $error = "";
