@@ -1,63 +1,58 @@
 # 🎓 SIKONSEL Web (Sistem Informasi Konseling Sekolah)
 
-![Language](https://img.shields.io/badge/Language-PHP%20Native-blue) ![Database](https://img.shields.io/badge/Database-MySQL-orange) ![Frontend](https://img.shields.io/badge/Frontend-Tailwind%20CSS-teal) ![Status](https://img.shields.io/badge/Status-Internal%20Use%20Only-red)
+![Language](https://img.shields.io/badge/Language-PHP%20Native-blue) ![Database](https://img.shields.io/badge/Database-MySQL-orange) ![Frontend](https://img.shields.io/badge/Frontend-Tailwind%20CSS-teal) ![Status](https://img.shields.io/badge/Status-Production-green)
 
-**SIKONSEL** adalah platform digital Bimbingan dan Konseling (BK) yang dirancang khusus untuk lingkungan **SMPN 4 Rancaekek**.
+**SIKONSEL** adalah platform digital Bimbingan dan Konseling (BK) resmi yang dirancang khusus untuk lingkungan **SMPN 4 Rancaekek**. Platform ini menjembatani komunikasi antara siswa dan Guru BK secara modern, aman, dan terenkripsi.
 
-Web ini berfungsi sebagai **Core System** (Pusat Data) untuk pengelolaan layanan konseling sekolah. Karena sifatnya yang **privat dan internal**, sistem ini tidak membuka pendaftaran untuk umum. Akun siswa hanya dapat dibuat dan dikelola oleh Guru BK (Admin).
+---
 
-Aplikasi ini juga bertindak sebagai **Server API** yang melayani pertukaran data untuk aplikasi **Sikonsel Mobile**.
+## 🌐 Live Demo
+Akses layanan Sikonsel secara langsung melalui tautan di bawah ini:
+🔗 **[https://sikonsel-espar.my.id](https://sikonsel-espar.my.id)**
 
 ---
 
 ## 🔐 Informasi Akses & Akun Demo
-
-Mengingat pendaftaran akun ditutup untuk publik (hanya Admin yang bisa input data siswa), silakan gunakan **Akun Dummy** di bawah ini untuk keperluan pengujian atau demonstrasi aplikasi:
+Sistem ini bersifat privat (internal sekolah). Untuk keperluan pengujian, silakan gunakan akun berikut:
 
 ### 1. Role Admin (Guru BK)
-Memiliki hak akses penuh untuk mengelola data siswa, jadwal, dan membalas laporan.
 * **Username:** `admin_bk`
 * **Password:** `admin123`
 
-### 2. Role Siswa (Akun Dummy)
-Digunakan untuk simulasi pengajuan konseling, melihat riwayat, dan akses fitur siswa.
+### 2. Role Siswa (Dummy)
 * **NISN / Username:** `12345`
 * **Password:** `siswa123`
 
-> **Catatan:** Mohon tidak menghapus akun demo ini agar penguji lain tetap bisa mengakses sistem.
-
 ---
 
-## 🚀 Fitur Utama
+## 🚀 Fitur Terbaru & Utama
 
-### 🌐 Berbasis Web (Admin & Siswa)
-* **🔒 Konseling Aman (Encrypted):** Curhatan siswa disimpan menggunakan enkripsi **AES-256**, menjamin privasi total.
-* **📅 Penjadwalan Otomatis:** Siswa dapat mengajukan jadwal temu janji konseling secara online.
-* **📊 Dashboard Guru BK:** Memantau statistik masalah siswa, riwayat laporan, dan tindak lanjut kasus.
-* **👨‍👩‍👧 Akses Wali Murid:** Portal khusus orang tua untuk melaporkan kendala siswa dari rumah.
-* **🖨️ Export Laporan:** Cetak laporan konseling bulanan ke PDF & Excel.
+### 🖥️ Interface & Experience
+* **✨ New Landing Page:** Halaman muka yang informatif dan ramah siswa, memberikan edukasi mengenai layanan BK sebelum login.
+* **⭐ Feedback & Rating System:** Siswa dapat memberikan penilaian (bintang 1-5) dan saran setelah sesi konseling selesai untuk evaluasi layanan.
+* **📱 Responsive Design:** Tampilan optimal di berbagai perangkat (Desktop, Tablet, dan Smartphone) menggunakan Tailwind CSS.
 
-### 📱 Backend API (Untuk Mobile App)
-* **Authentication:** Menangani login siswa via Token.
-* **JSON Endpoints:** Menyediakan data riwayat, profil, dan info sekolah untuk aplikasi Android.
-* **Firebase Integration:** Mengirim notifikasi real-time ke HP pengguna.
+### 🔒 Keamanan & Privasi
+* **🔐 Inactivity Timeout:** Sesi otomatis berakhir jika tidak ada aktivitas selama **10 menit** untuk menjaga keamanan data di perangkat publik.
+* **🛡️ Encrypted Data (AES-256):** Seluruh isi laporan curhatan siswa dienkripsi menggunakan standar industri, sehingga hanya Guru BK yang berwenang yang dapat membacanya.
+* **🚫 No Cookie Persistence:** Menghapus fitur "Remember Me" demi mencegah akses tidak sah pada perangkat bersama.
+
+### 📅 Manajemen Konseling
+* **📅 Penjadwalan Real-Time:** Pengajuan jadwal temu janji dengan notifikasi status (Pending, Disetujui, Selesai, Ditolak).
+* **📊 Dashboard Analitik:** Guru BK dapat memantau tren masalah siswa secara statistik.
 
 ---
 
 ## 💻 Teknologi yang Digunakan
 
-* **Backend:** PHP Native (Support PHP 8.x)
-* **Frontend:** HTML5, Tailwind CSS
-* **Database:** MySQL / MariaDB
-* **Keamanan:** OpenSSL (AES-256 Encryption) untuk data sensitif
-* **Server:** Apache (Wajib aktifkan `mod_rewrite` untuk API)
+* **Backend:** PHP Native (Optimized for PHP 8.2+)
+* **Frontend:** Tailwind CSS, FontAwesome, Google Fonts (Plus Jakarta Sans)
+* **Database:** MySQL
+* **Encryption:** OpenSSL AES-256-CBC
+* **API:** Firebase Cloud Messaging (FCM) untuk Notifikasi Mobile
 
 ---
 
-## ⚙️ Cara Instalasi (Localhost)
-
-Ikuti langkah ini untuk menjalankan project di komputer lokal (XAMPP/Laragon):
-
-### 1. Clone Repository
-```bash
-git clone [https://github.com/Salz30/sikonsel-web.git](https://github.com/Salz30/sikonsel-web.git)
+**© 2026 Developed by:**
+**23552011046 - Salman Azhar Latisio**
+*RP 23 CNS A - UAS Pemrograman Web 1*
