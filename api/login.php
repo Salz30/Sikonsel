@@ -54,7 +54,7 @@ if (!empty($username) && !empty($password)) {
             }
 
             // 4. Cari ID Siswa
-            $stmtSiswa = $conn->prepare("SELECT id_siswa, nama_lengkap FROM siswa WHERE user_id = :uid");
+            $stmtSiswa = $conn->prepare("SELECT id_siswa FROM siswa WHERE user_id = :uid");
             $stmtSiswa->bindParam(':uid', $user['id_user']);
             $stmtSiswa->execute();
             $dataSiswa = $stmtSiswa->fetch(PDO::FETCH_ASSOC);
