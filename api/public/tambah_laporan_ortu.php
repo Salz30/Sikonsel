@@ -7,7 +7,7 @@ header("Access-Control-Allow-Methods: POST");
 // Pastikan path ke database benar
 include_once '../../config/database.php';
 
-// Cek file enkripsi, jika tidak ada pakai fungsi dummy biar tidak error
+// Cek file enkripsi
 if (file_exists('../../includes/encryption.php')) {
     include_once '../../includes/encryption.php';
 } else {
@@ -16,20 +16,17 @@ if (file_exists('../../includes/encryption.php')) {
 
 $data = json_decode(file_get_contents("php://input"));
 
-// LOG DATA (Opsional: Untuk cek jika ada error nanti)
-// file_put_contents("debug_ortu.txt", print_r($data, true));
-
 if(
     !empty($data->nama_ortu) && 
     !empty($data->laporan)
 ){
-    // Format Isi Laporan: Gabungkan data pelapor ke dalam isi
+    // Format Isi Laporan
     $isi_lengkap = "Pelapor: " . $data->nama_ortu . "\n" .
                    "Siswa Terlapor: " . ($data->nama_siswa ?? '-') . " (" . ($data->kelas ?? '-') . ")\n\n" .
                    "Isi Laporan:\n" . $data->laporan;
 
     // Enkripsi
-    $judul_enc = encryptData("Laporan Orang Tua");
+    $judul_enc = encryptData("Laporan Orang Tua: " . substr($data->laporan, 0, 20) . "...");
     $isi_enc   = encryptData($isi_lengkap);
     
     // Default Values
@@ -37,12 +34,29 @@ if(
     $status = "Pending";
     $tgl = date('Y-m-d H:i:s');
     
-    // --- KUNCI PERBAIKAN ---
-    $id_guru = 1;      // Langsung tembak ke Admin BK (ID 1)
-    $id_siswa = NULL;  // Biarkan NULL (Database sudah diizinkan di Langkah 1)
+    // --- PERBAIKAN: CARI ID SISWA BERDASARKAN NAMA & KELAS ---
+    $id_guru = 1;      
+    $id_siswa = NULL;
+
+    if (!empty($data->nama_siswa) && !empty($data->kelas)) {
+        try {
+            // Mencocokkan nama dari tabel users dan kelas dari tabel siswa
+            $stmtSearch = $conn->prepare("SELECT s.id_siswa 
+                                         FROM siswa s 
+                                         JOIN users u ON s.user_id = u.id_user 
+                                         WHERE u.nama_lengkap = ? AND s.kelas = ?");
+            $stmtSearch->execute([$data->nama_siswa, $data->kelas]);
+            $rowSiswa = $stmtSearch->fetch();
+            
+            if ($rowSiswa) {
+                $id_siswa = $rowSiswa['id_siswa'];
+            }
+        } catch (Exception $e) {
+            // Jika pencarian gagal, biarkan id_siswa tetap NULL
+        }
+    }
 
     try {
-        // Query menyertakan id_guru
         $query = "INSERT INTO laporan_bk (id_siswa, id_guru, judul_laporan, isi_laporan, kategori, status, tgl_laporan) 
                   VALUES (:id_siswa, :id_guru, :judul, :isi, :kategori, :status, :tgl)";
         
